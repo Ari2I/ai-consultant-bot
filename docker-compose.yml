@@ -1,0 +1,32 @@
+services:
+  bot:
+    build: .
+    container_name: ai_consultant_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Файл базы данных хранится в volume ./data, а не внутри образа
+      # — при пересборке контейнера база знаний и журнал обращений
+      # не теряются.
+      - DATABASE_URL=sqlite:////app/data/knowledge_base.db
+    volumes:
+      - ./data:/app/data
+      # Кэш модели эмбеддингов (sentence-transformers скачивает файлы
+      # модели из HuggingFace Hub при первом запуске, ~470 МБ для
+      # paraphrase-multilingual-MiniLM-L12-v2) — вынесен в отдельный
+      # volume, чтобы пересборка образа не заставляла качать модель
+      # заново каждый раз.
+      - hf_cache:/home/appuser/.cache/huggingface
+    # Ограничения ресурсов — sentence-transformers/torch не должны
+    # положить весь сервер при неожиданной нагрузке.
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  hf_cache:
