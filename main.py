@@ -19,7 +19,7 @@ from bot.rate_limiter import RateLimiter
 from config import load_settings
 from database.repository import KnowledgeRepository
 from embeddings.encoder import EmbeddingEncoder
-from llm.deepseek_client import DeepSeekClient
+from llm.gigachat_client import GigaChatClient
 from rag.pipeline import RagPipeline
 
 
@@ -59,13 +59,15 @@ async def main() -> None:
     # DEPLOYMENT.md про необходимость доступа в интернет на сервере
     # при первом старте.
     encoder = EmbeddingEncoder(settings.embedding_model_name)
-    llm_client = DeepSeekClient(
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-        model=settings.deepseek_model,
-        max_retries=settings.deepseek_max_retries,
-        retry_backoff_seconds=settings.deepseek_retry_backoff_seconds,
-        request_timeout=settings.deepseek_request_timeout,
+    llm_client = GigaChatClient(
+        credentials=settings.gigachat_credentials,
+        scope=settings.gigachat_scope,
+        model=settings.gigachat_model,
+        verify_ssl_certs=settings.gigachat_verify_ssl_certs,
+        ca_bundle_file=settings.gigachat_ca_bundle_file,
+        max_retries=settings.gigachat_max_retries,
+        retry_backoff_seconds=settings.gigachat_retry_backoff_seconds,
+        request_timeout=settings.gigachat_request_timeout,
     )
     rag_pipeline = RagPipeline(
         repository=repository,

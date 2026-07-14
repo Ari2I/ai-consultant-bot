@@ -1,5 +1,5 @@
 """
-Парсинг документов базы знаний: приведение PDF/DOCX/XLSX/TXT к
+Парсинг документов базы знаний: приведение PDF/DOCX/XLSX/TXT/MD к
 обычному тексту, пригодному для дальнейшего чанкинга и вычисления
 эмбеддингов.
 
@@ -149,9 +149,16 @@ def parse_xlsx(file_path: str) -> str:
     return text
 
 
-def parse_txt(file_path: str) -> str:
+def _read_text_file(file_path: str) -> str:
     """
     Читает обычный текстовый файл, пробуя UTF-8, затем CP1251.
+
+    Общая логика для форматов, где содержимое файла — это уже
+    готовый текст без бинарной структуры (.txt, .md) — Markdown не
+    требует отдельного разбора синтаксиса: заголовки, списки и
+    выделения текста прекрасно понимает сама модель при генерации
+    ответа, а лишний слой очистки разметки рискует случайно
+    исказить смысл (например, потерять заголовок как часть текста).
 
     Исключения:
         DocumentParsingError: файл не найден/недоступен, не удалось
@@ -185,13 +192,23 @@ def parse_txt(file_path: str) -> str:
     return text
 
 
+def parse_txt(file_path: str) -> str:
+    """Читает обычный текстовый файл (.txt). См. _read_text_file."""
+    return _read_text_file(file_path)
+
+
+def parse_md(file_path: str) -> str:
+    """Читает Markdown-файл (.md) как обычный текст. См. _read_text_file."""
+    return _read_text_file(file_path)
+
+
 # Поддерживаемые расширения — используется только для сообщения об
 # ошибке; сам выбор парсера ниже сделан явными вызовами (а не через
 # словарь функций), чтобы подмена parse_txt/parse_docx/... в тестах
 # через unittest.mock.patch срабатывала предсказуемо: вызов по имени
 # всегда идёт через пространство имён модуля заново, в отличие от
 # заранее сохранённой в словаре ссылки на функцию.
-_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".xlsx", ".txt")
+_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".xlsx", ".txt", ".md")
 
 
 def parse_document(file_path: str) -> Tuple[str, str]:
@@ -216,6 +233,8 @@ def parse_document(file_path: str) -> Tuple[str, str]:
         text = parse_xlsx(file_path)
     elif extension == ".txt":
         text = parse_txt(file_path)
+    elif extension == ".md":
+        text = parse_md(file_path)
     else:
         raise DocumentParsingError(
             f"Неподдерживаемый формат файла: "

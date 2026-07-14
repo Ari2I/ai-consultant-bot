@@ -16,6 +16,39 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _get_proxy_url() -> Optional[str]:
+    """
+    Читает и валидирует PROXY_URL из окружения.
+
+    Явно проверяем наличие схемы (socks5://, socks4://, http://,
+    https://) на этапе загрузки настроек — без этой проверки
+    некорректный PROXY_URL (например, просто "1.2.3.4:1080" без
+    схемы) падает глубоко внутри aiogram/python-socks с
+    труднопонятным "Invalid scheme component: ", а не с понятным
+    сообщением о том, что не так в .env.
+    """
+    raw = os.getenv("PROXY_URL", "").strip()
+    if not raw:
+        return None
+
+    valid_schemes = ("socks5://", "socks4://", "http://", "https://")
+    if not raw.lower().startswith(valid_schemes):
+        raise RuntimeError(
+            f"Некорректный PROXY_URL: '{raw}'. Не указана схема "
+            f"прокси. Ожидается один из форматов: "
+            f"socks5://user:password@host:port, "
+            f"socks5://host:port, http://host:port и т.д."
+        )
+    return raw
+
+
+def _get_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "да"}
+
+
 def _get_int_list(name: str) -> List[int]:
     """Разбирает переменную окружения вида '123,456' в список int."""
     raw = os.getenv(name, "")
@@ -40,12 +73,14 @@ class Settings:
     database_url: str
     bot_proxy_url: Optional[str]
 
-    deepseek_api_key: str
-    deepseek_base_url: str
-    deepseek_model: str
-    deepseek_max_retries: int
-    deepseek_retry_backoff_seconds: float
-    deepseek_request_timeout: int
+    gigachat_credentials: str
+    gigachat_scope: str
+    gigachat_model: str
+    gigachat_verify_ssl_certs: bool
+    gigachat_ca_bundle_file: Optional[str]
+    gigachat_max_retries: int
+    gigachat_retry_backoff_seconds: float
+    gigachat_request_timeout: int
 
     embedding_model_name: str
 
@@ -63,7 +98,7 @@ def load_settings() -> Settings:
     if not bot_token:
         raise RuntimeError(
             "Не задан BOT_TOKEN. Укажите токен Telegram-бота "
-            "в файле .env (см. .env.example)"
+            "в файле .env"
         )
 
     admin_chat_ids = _get_int_list("ADMIN_CHAT_IDS")
@@ -74,11 +109,13 @@ def load_settings() -> Settings:
             "ADMIN_CHAT_IDS=123456789"
         )
 
-    deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if not deepseek_api_key:
+    gigachat_credentials = os.getenv("GIGACHAT_CREDENTIALS", "").strip()
+    if not gigachat_credentials:
         raise RuntimeError(
-            "Не задан DEEPSEEK_API_KEY. Получите ключ на "
-            "https://platform.deepseek.com и укажите его в .env"
+            "Не задан GIGACHAT_CREDENTIALS. Получите Authorization key "
+            "в личном кабинете https://developers.sber.ru/studio/ "
+            "(раздел проекта GigaChat API → Настройки API → Получить "
+            "ключ) и укажите его в .env"
         )
 
     return Settings(
@@ -87,27 +124,40 @@ def load_settings() -> Settings:
         database_url=os.getenv(
             "DATABASE_URL", "sqlite:///knowledge_base.db"
         ),
-        bot_proxy_url=os.getenv("PROXY_URL", "").strip() or None,
-        deepseek_api_key=deepseek_api_key,
-        deepseek_base_url=os.getenv(
-            "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+        bot_proxy_url=_get_proxy_url(),
+        gigachat_credentials=gigachat_credentials,
+        # GIGACHAT_API_PERS — доступ для физических лиц (подходит для
+        # разработки и небольших проектов). Для юрлиц/ИП — B2B (пакеты)
+        # или CORP (pay-as-you-go) — см. .env.example.
+        gigachat_scope=os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS"),
+        # GigaChat-2 — актуальная (на 07.2026) базовая модель. Модели
+        # первого поколения (GigaChat, GigaChat-Pro, GigaChat-Max)
+        # больше не существуют как отдельные модели — Sber сам
+        # перенаправляет такие запросы на GigaChat-2/-Pro/-Max, но
+        # правильнее сразу использовать актуальное имя.
+        gigachat_model=os.getenv("GIGACHAT_MODEL", "GigaChat-2"),
+        # Сертификат НУЦ Минцифры обязателен для TLS-соединения с
+        # GigaChat API. По умолчанию проверка включена (безопасно) —
+        # выключать (GIGACHAT_VERIFY_SSL_CERTS=false) стоит только
+        # для локальной разработки, если сертификат ещё не установлен
+        # (см. README/DEPLOYMENT.md).
+        gigachat_verify_ssl_certs=_get_bool(
+            "GIGACHAT_VERIFY_SSL_CERTS", True
         ),
-        # deepseek-v4-flash — актуальная (на 07.2026) быстрая и дешёвая
-        # модель, достаточная для ответов на основе готового RAG-
-        # контекста. Устаревшие имена deepseek-chat / deepseek-reasoner
-        # прекращают поддержку 24.07.2026, поэтому используется новый
-        # идентификатор, а не легаси-алиас.
-        deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
-        deepseek_max_retries=int(os.getenv("DEEPSEEK_MAX_RETRIES", "2")),
-        deepseek_retry_backoff_seconds=float(
-            os.getenv("DEEPSEEK_RETRY_BACKOFF_SECONDS", "1.0")
+        gigachat_ca_bundle_file=(
+            os.getenv("GIGACHAT_CA_BUNDLE_FILE", "").strip() or None
         ),
-        deepseek_request_timeout=int(
-            os.getenv("DEEPSEEK_REQUEST_TIMEOUT", "30")
+        gigachat_max_retries=int(os.getenv("GIGACHAT_MAX_RETRIES", "2")),
+        gigachat_retry_backoff_seconds=float(
+            os.getenv("GIGACHAT_RETRY_BACKOFF_SECONDS", "1.0")
+        ),
+        gigachat_request_timeout=int(
+            os.getenv("GIGACHAT_REQUEST_TIMEOUT", "30")
         ),
         # Многоязычная модель эмбеддингов (поддерживает русский),
         # работает локально на CPU через sentence-transformers, без
-        # платных API-вызовов.
+        # платных API-вызовов. Не связана с GigaChat — эмбеддинги
+        # остаются локальными независимо от провайдера генерации.
         embedding_model_name=os.getenv(
             "EMBEDDING_MODEL_NAME",
             "paraphrase-multilingual-MiniLM-L12-v2",

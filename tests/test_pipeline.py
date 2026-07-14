@@ -2,9 +2,9 @@
 Тесты для rag.pipeline.RagPipeline.
 
 Используется реальный KnowledgeRepository (SQLite in-memory) для
-реалистичности, но EmbeddingEncoder и DeepSeekClient полностью
+реалистичности, но EmbeddingEncoder и GigaChatClient полностью
 заменены фиктивными зависимостями через параметры конструктора —
-без сети, без реальной ML-модели и без токенов DeepSeek.
+без сети, без реальной ML-модели и без токенов GigaChat.
 """
 
 import unittest
@@ -14,7 +14,7 @@ import numpy as np
 
 from database.repository import KnowledgeRepository
 from embeddings.encoder import EmbeddingEncoder
-from llm.deepseek_client import DeepSeekApiError, DeepSeekClient
+from llm.gigachat_client import GigaChatApiError, GigaChatClient
 from rag.pipeline import RagPipeline
 
 
@@ -46,10 +46,10 @@ class RagPipelineTest(unittest.TestCase):
         self.fake_model = MagicMock()
 
         self.encoder = EmbeddingEncoder("fake-model", model=self.fake_model)
-        self.llm_client = DeepSeekClient(
-            api_key="k",
-            base_url="https://api.deepseek.com",
-            model="deepseek-v4-flash",
+        self.llm_client = GigaChatClient(
+            credentials="k",
+            scope="GIGACHAT_API_PERS",
+            model="GigaChat-2",
             client=self.fake_llm_client_backend,
         )
 
@@ -64,7 +64,7 @@ class RagPipelineTest(unittest.TestCase):
 
     def test_answers_when_similarity_above_threshold(self):
         self.fake_model.encode.return_value = np.array([[1.0, 0.0, 0.0]])
-        self.fake_llm_client_backend.chat.completions.create.return_value = (
+        self.fake_llm_client_backend.chat.return_value = (
             _make_success_llm_response("Работаем с 10:00 до 20:00.")
         )
         pipeline = self._make_pipeline(threshold=0.75)
@@ -85,7 +85,7 @@ class RagPipelineTest(unittest.TestCase):
 
         self.assertTrue(result.escalated)
         self.assertIsNone(result.answer)
-        self.fake_llm_client_backend.chat.completions.create.assert_not_called()
+        self.fake_llm_client_backend.chat.assert_not_called()
 
     def test_escalates_when_knowledge_base_is_empty(self):
         empty_repository = KnowledgeRepository("sqlite:///:memory:")
@@ -105,14 +105,11 @@ class RagPipelineTest(unittest.TestCase):
 
     def test_escalates_when_llm_fails_after_retries(self):
         self.fake_model.encode.return_value = np.array([[1.0, 0.0, 0.0]])
-        self.fake_llm_client_backend.chat.completions.create.side_effect = (
-            RuntimeError("недостижимо")
-        )
         # Подменяем generate_answer напрямую, чтобы гарантированно
-        # получить DeepSeekApiError без завязки на конкретный тип
-        # исключения openai.
+        # получить GigaChatApiError без завязки на конкретный тип
+        # исключения gigachat.
         self.llm_client.generate_answer = MagicMock(
-            side_effect=DeepSeekApiError("DeepSeek недоступен")
+            side_effect=GigaChatApiError("GigaChat недоступен")
         )
         pipeline = self._make_pipeline(threshold=0.75)
 

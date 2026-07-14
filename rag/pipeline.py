@@ -1,6 +1,6 @@
 """
 Оркестрация RAG-пайплайна: эмбеддинг вопроса клиента -> поиск
-релевантных фрагментов базы знаний -> генерация ответа через DeepSeek
+релевантных фрагментов базы знаний -> генерация ответа через GigaChat
 или эскалация к админам, если уверенность найденного контекста ниже
 порога.
 """
@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from database.repository import KnowledgeRepository
 from embeddings.encoder import EmbeddingEncoder
-from llm.deepseek_client import DeepSeekApiError, DeepSeekClient
+from llm.gigachat_client import GigaChatApiError, GigaChatClient
 from rag.search import find_relevant_chunks
 
 
@@ -34,7 +34,7 @@ class RagPipeline:
         self,
         repository: KnowledgeRepository,
         encoder: EmbeddingEncoder,
-        llm_client: DeepSeekClient,
+        llm_client: GigaChatClient,
         similarity_threshold: float,
         top_k_chunks: int,
     ) -> None:
@@ -53,7 +53,7 @@ class RagPipeline:
             - лучший найденный фрагмент по сходству ниже порога ->
               эскалация (модель не вызывается вообще — экономит
               токены на заведомо нерелевантном контексте);
-            - DeepSeek API вернул окончательную ошибку (после
+            - GigaChat API вернул окончательную ошибку (после
               исчерпания ретраев) -> тоже эскалация, а не молчание,
               чтобы клиент в любом случае получил внимание человека.
         """
@@ -84,7 +84,7 @@ class RagPipeline:
 
         try:
             answer = self._llm_client.generate_answer(question, context)
-        except DeepSeekApiError as exc:
+        except GigaChatApiError as exc:
             return AnswerResult(
                 answer=None,
                 escalated=True,

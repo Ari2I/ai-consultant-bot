@@ -18,6 +18,12 @@ services:
       # volume, чтобы пересборка образа не заставляла качать модель
       # заново каждый раз.
       - hf_cache:/home/appuser/.cache/huggingface
+      # Сертификат НУЦ Минцифры для TLS-соединения с GigaChat API —
+      # положите файл в ./certs на хосте и укажите путь внутри
+      # контейнера в GIGACHAT_CA_BUNDLE_FILE (.env). Не встроен в
+      # образ намеренно — см. DEPLOYMENT.md, раздел «Сертификат для
+      # GigaChat».
+      - ./certs:/app/certs:ro
     # Ограничения ресурсов — sentence-transformers/torch не должны
     # положить весь сервер при неожиданной нагрузке.
     mem_limit: 1g

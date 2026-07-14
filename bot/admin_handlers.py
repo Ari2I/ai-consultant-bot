@@ -47,7 +47,7 @@ async def cmd_kb_add(
     await state.set_state(AddKnowledgeDocumentStates.waiting_for_file)
     await message.answer(
         "Пришлите документ для базы знаний — поддерживаются форматы "
-        "PDF, DOCX, XLSX, TXT. Или /cancel для отмены."
+        "PDF, DOCX, XLSX, TXT, MD. Или /cancel для отмены."
     )
 
 
@@ -127,7 +127,7 @@ async def kb_add_receive_file(
 async def kb_add_wrong_content(message: Message) -> None:
     await message.answer(
         "Пришлите файл документом (не как текст и не как фото) — "
-        "PDF, DOCX, XLSX или TXT. Либо /cancel для отмены."
+        "PDF, DOCX, XLSX или TXT/MD. Либо /cancel для отмены."
     )
 
 

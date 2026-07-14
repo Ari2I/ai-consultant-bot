@@ -19,6 +19,7 @@ from documents.parsers import (
     DocumentParsingError,
     parse_docx,
     parse_document,
+    parse_md,
     parse_pdf,
     parse_txt,
     parse_xlsx,
@@ -56,6 +57,44 @@ class ParseTxtTest(unittest.TestCase):
             open(file_path, "w", encoding="utf-8").close()
             with self.assertRaises(DocumentParsingError):
                 parse_txt(file_path)
+
+
+class ParseMdTest(unittest.TestCase):
+    def test_reads_markdown_file_as_is(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "faq.md")
+            content = (
+                "# Часто задаваемые вопросы\n\n"
+                "## Режим работы\n\n"
+                "Магазин работает с 10:00 до 20:00 без выходных."
+            )
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            text = parse_md(file_path)
+
+            self.assertEqual(text, content)
+
+    def test_reads_cp1251_markdown_as_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "legacy.md")
+            with open(file_path, "w", encoding="cp1251") as f:
+                f.write("# Старый файл\n\nВ кодировке Windows-1251.")
+
+            text = parse_md(file_path)
+
+            self.assertIn("Старый файл", text)
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(DocumentParsingError):
+            parse_md("/nonexistent/path/file.md")
+
+    def test_empty_file_raises(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "empty.md")
+            open(file_path, "w", encoding="utf-8").close()
+            with self.assertRaises(DocumentParsingError):
+                parse_md(file_path)
 
 
 class ParseDocxTest(unittest.TestCase):
@@ -164,6 +203,16 @@ class ParseDocumentDispatchTest(unittest.TestCase):
         self.assertEqual(text, "текст")
         self.assertEqual(fmt, "txt")
         mock_parse_txt.assert_called_once_with("about.txt")
+
+    @patch("documents.parsers.parse_md")
+    def test_dispatches_md_by_extension(self, mock_parse_md):
+        mock_parse_md.return_value = "текст"
+
+        text, fmt = parse_document("faq.md")
+
+        self.assertEqual(text, "текст")
+        self.assertEqual(fmt, "md")
+        mock_parse_md.assert_called_once_with("faq.md")
 
     @patch("documents.parsers.parse_xlsx")
     def test_dispatches_xlsx_case_insensitively(self, mock_parse_xlsx):

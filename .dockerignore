@@ -2,6 +2,9 @@
 *.db
 *.sqlite3
 data/
+certs/*.cer
+certs/*.pem
+certs/*.crt
 
 .venv/
 venv/
