@@ -11,7 +11,7 @@ import unittest
 from types import SimpleNamespace
 
 from bot.admin_handlers import _is_admin
-from bot.client_handlers import _format_escalation_notice
+from bot.client_handlers import _format_escalation_notice, _is_plain_greeting
 from config import Settings
 
 
@@ -78,6 +78,30 @@ class FormatEscalationNoticeTest(unittest.TestCase):
         notice = _format_escalation_notice(message, "Вопрос")
         self.assertIn("неизвестно", notice)
         self.assertIn("без username", notice)
+
+
+class IsPlainGreetingTest(unittest.TestCase):
+    def test_recognizes_common_greetings(self):
+        for text in [
+            "привет", "Привет", "ПРИВЕТ", "привет!", "здравствуйте",
+            "добрый день", "добрый вечер", "hi", "hello", "ку",
+        ]:
+            with self.subTest(text=text):
+                self.assertTrue(_is_plain_greeting(text))
+
+    def test_greeting_with_surrounding_whitespace(self):
+        self.assertTrue(_is_plain_greeting("  привет  "))
+
+    def test_does_not_match_question_starting_with_greeting(self):
+        self.assertFalse(
+            _is_plain_greeting("привет, а сколько стоит доставка?")
+        )
+
+    def test_does_not_match_real_question(self):
+        self.assertFalse(_is_plain_greeting("какой у вас режим работы?"))
+
+    def test_empty_string_is_not_a_greeting(self):
+        self.assertFalse(_is_plain_greeting(""))
 
 
 if __name__ == "__main__":

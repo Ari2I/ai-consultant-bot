@@ -98,7 +98,7 @@ def load_settings() -> Settings:
     if not bot_token:
         raise RuntimeError(
             "Не задан BOT_TOKEN. Укажите токен Telegram-бота "
-            "в файле .env"
+            "в файле .env (см. .env.example)"
         )
 
     admin_chat_ids = _get_int_list("ADMIN_CHAT_IDS")
